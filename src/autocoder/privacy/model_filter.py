@@ -1,7 +1,7 @@
 import re
 import yaml
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 from autocoder.common import AutoCoderArgs
 from autocoder.utils import llms as llm_utils
 
@@ -9,8 +9,8 @@ from autocoder.utils import llms as llm_utils
 class ModelPathFilter:
     def __init__(self,
                  model_name: str,
-                 args: AutoCoderArgs,
-                 default_forbidden: List[str] = None):
+                 args_or_path: Union[AutoCoderArgs, str, Path],
+                 default_forbidden: Optional[List[str]] = None):
         """
         模型路径过滤器
         :param model_name: 当前使用的模型名称
@@ -18,10 +18,16 @@ class ModelPathFilter:
         :param default_forbidden: 默认禁止路径规则
         """
         self.model_name = model_name
-        if args.model_filter_path:
-            self.config_path = Path(args.model_filter_path)
+
+        if isinstance(args_or_path, AutoCoderArgs):
+            args = args_or_path
+            if args.model_filter_path:
+                self.config_path = Path(args.model_filter_path)
+            else:
+                source_dir = args.source_dir or "."
+                self.config_path = Path(source_dir, ".model_filters.yml")
         else:
-            self.config_path = Path(args.source_dir, ".model_filters.yml")
+            self.config_path = Path(args_or_path)
         self.default_forbidden = default_forbidden or []
         self._rules_cache: Dict[str, List[re.Pattern]] = {}
         self._load_rules()
@@ -81,7 +87,7 @@ class ModelPathFilter:
     @classmethod
     def from_model_object(cls,
                          llm_obj,
-                         args: AutoCoderArgs,
+                         args: Optional[AutoCoderArgs] = None,
                          default_forbidden: Optional[List[str]] = None):
         """
         从LLM对象创建过滤器
@@ -93,8 +99,11 @@ class ModelPathFilter:
         if not model_name:
             raise ValueError(f"{model_name} is not found")
 
+        if args is None:
+            args = AutoCoderArgs()
+
         return cls(
             model_name=model_name,
-            args=args,
+            args_or_path=args,
             default_forbidden=default_forbidden
         )
